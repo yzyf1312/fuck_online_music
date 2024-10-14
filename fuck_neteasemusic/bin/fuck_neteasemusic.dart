@@ -775,7 +775,7 @@ Future<void> neteaseWithAccount(String cookieString) async {
         }
         print("");
 
-        bool isFinish = false;
+        isFinish = false;
         while (!isFinish) {
           switch (input("你希望获取哪里的歌单?\n"
                   "输入 c 为此账户创建的歌单, F 为此账户收藏的歌单\n"
@@ -799,6 +799,7 @@ Future<void> neteaseWithAccount(String cookieString) async {
               print("请提供正确的输入!");
           }
         }
+
         break;
       default:
         print("请提供正确的输入!");
