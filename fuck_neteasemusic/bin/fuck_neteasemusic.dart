@@ -38,12 +38,15 @@ void main(List<String> arguments) async {
   }
 
   final String? cookieString = await getCookieFromTXT();
-  listId ??= input("输入目标歌单的 listid:");
-
-  index(listId, cookieString);
+  if (listId == null) {
+    neteaseWithAccount(cookieString ?? "");
+  } else {
+    neteaseIndex(listId, cookieString);
+  }
 }
 
-void index(final String? listId, final String? cookieString) async {
+Future<void> neteaseIndex(
+    final String? listId, final String? cookieString) async {
   if (cookieString == null || listId == null) {
     print("Cookie 和 listid 缺一不可!");
     return;
@@ -90,7 +93,7 @@ void index(final String? listId, final String? cookieString) async {
   if (data["netease"] is! Map || data["netease"].containsKey(listId) != true) {
     List<int> nullIntList = [];
     data["netease"] = {
-      listId: {"success": nullIntList, "skip": nullIntList}
+      listId: {"success": nullIntList}
     };
   }
 
@@ -129,10 +132,6 @@ void index(final String? listId, final String? cookieString) async {
     if (songUrl == "") {
       print("歌曲链接为空，跳过歌曲");
       skipTimes++;
-      if (data["netease"][listId]["skip"].contains(songData["id"]) != true) {
-        data["netease"][listId]["skip"].add(songData["id"]);
-        dataFile.writeAsString(convert.jsonEncode(data));
-      }
       continue;
     }
 
@@ -156,10 +155,6 @@ void index(final String? listId, final String? cookieString) async {
             songUrl, "$localFile.temp", "$localFilename.temp")) ==
         -1) {
       skipTimes++;
-      if (data["netease"][listId]["skip"].contains(songData["id"]) != true) {
-        data["netease"][listId]["skip"].add(songData["id"]);
-        dataFile.writeAsString(convert.jsonEncode(data));
-      }
       continue;
     }
     await downloadFile(albumPicUrlData, albumPicFile, albumPicFilename,
@@ -213,7 +208,7 @@ Future<int> downloadFile(String url, String savePath, String fileName,
         // 发起GET请求
         final response = await http
             .get(Uri.parse(url), headers: headerData)
-            .timeout(Duration(seconds: 8));
+            .timeout(Duration(seconds: 16));
 
         // 检查请求是否成功
         if (response.statusCode == 200) {
@@ -225,7 +220,7 @@ Future<int> downloadFile(String url, String savePath, String fileName,
           print('文件 $fileName 下载失败，状态码: ${response.statusCode}');
         }
       } else {
-        await dio.Dio().download(url, savePath).timeout(Duration(seconds: 8));
+        await dio.Dio().download(url, savePath).timeout(Duration(seconds: 16));
         print("文件 $fileName 下载成功");
       }
       return 0;
@@ -388,7 +383,7 @@ Future<void> lyricDownload(int songId, String lyricFile) async {
     try {
       http.Response response = await http
           .post(targetUrl, headers: headerData, body: data)
-          .timeout(Duration(seconds: 2));
+          .timeout(Duration(seconds: 4));
 
       Map<String, dynamic> responseData =
           convert.jsonDecode(response.body) as Map<String, dynamic>;
@@ -637,6 +632,174 @@ Future<String?> getCookieFromTXT() async {
             "It's type is ${error.runtimeType}\n"
             "StackTrace: ${StackTrace.current}");
         return null;
+    }
+  }
+}
+
+Future<Map<String, dynamic>> getUser(String cookieString) async {
+  Uri url = Uri.https("music.163.com", "api/nuser/account/get");
+  Map<String, String> encryptReqData = weapi({});
+
+  Map<String, String> headerData = {
+    'Cookie': cookieString,
+    'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36' // 根据需要设置User-Agent
+  };
+  http.Response response =
+      await http.post(url, headers: headerData, body: encryptReqData);
+
+  return convert.jsonDecode(response.body) as Map<String, dynamic>;
+}
+
+Future<Map<String, dynamic>> getUserPlaylist(
+    int userId, String cookieString) async {
+  Uri targetUrl = Uri.https("music.163.com", "api/user/playlist");
+  Map<String, String> reqData = {
+    "uid": "$userId",
+    "limit": "1000",
+    "offset": "0",
+    "includeVideo": "true"
+  };
+  Map<String, String> headerData = {
+    'Cookie': cookieString,
+    'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36' // 根据需要设置User-Agent
+  };
+
+  http.Response response =
+      await http.post(targetUrl, body: reqData, headers: headerData);
+
+  return convert.jsonDecode(response.body) as Map<String, dynamic>;
+}
+
+void neteaseWithAccount(String cookieString) async {
+  List<({int id, String name})> createPlaylist = [];
+  List<({int id, String name})> favouritePlaylist = [];
+  List<({int id, String name})> unknowPlaylist = [];
+
+  for (Map<String, dynamic> element in List<Map<String, dynamic>>.from(
+      (await getUserPlaylist(
+          (await getUser(cookieString))["account"]["id"] as int,
+          cookieString))["playlist"] as List)) {
+    switch (element["subscribed"]) {
+      case true:
+        favouritePlaylist.add((name: element["name"], id: element["id"]));
+        break;
+      case false:
+        createPlaylist.add((name: element["name"], id: element["id"]));
+        break;
+      default:
+        unknowPlaylist.add((name: element["name"], id: element["id"]));
+    }
+  }
+
+  print("我创建的歌单");
+  int i = 0;
+  for (({int id, String name}) element in createPlaylist) {
+    i++;
+    print("$i: ${element.name}");
+  }
+  print("");
+
+  print("我收藏的歌单");
+  i = 0;
+  for (({int id, String name}) element in favouritePlaylist) {
+    i++;
+    print("$i: ${element.name}");
+  }
+  print("");
+
+  bool isFinish = false;
+  while (!isFinish) {
+    switch (input("你希望获取哪里的歌单?\n"
+            "输入 c 为我创建的歌单, F 为我收藏的歌单, id 为另外提供歌单的 listid, ac 为他人账户的歌单\n"
+            "不区分大小写(c/F/id/ac)")!
+        .toUpperCase()) {
+      case "C":
+        String? inputStr = input("请输入歌单对应的编号:");
+        int inputInt = (int.tryParse(inputStr ?? "1") ?? 1) - 1;
+        neteaseIndex(createPlaylist[inputInt].id.toString(), cookieString);
+        isFinish = true;
+        break;
+      case "F":
+        String? inputStr = input("请输入歌单对应的编号:");
+        int inputInt = (int.tryParse(inputStr ?? "1") ?? 1) - 1;
+        neteaseIndex(favouritePlaylist[inputInt].id.toString(), cookieString);
+        isFinish = true;
+        break;
+      case "ID":
+        String? listId;
+        listId ??= input("输入目标歌单的 listid:");
+        await neteaseIndex(listId, cookieString);
+        isFinish = true;
+        break;
+      case "AC":
+        List<({int id, String name})> otherCreatePlaylist = [];
+        List<({int id, String name})> otherFavouritePlaylist = [];
+        List<({int id, String name})> otherUnknowPlaylist = [];
+
+        for (Map<String, dynamic> element in List<Map<String, dynamic>>.from(
+            (await getUserPlaylist(
+                int.tryParse(input("请输入他人账户的 id:") ?? "1") ?? 1,
+                cookieString))["playlist"] as List)) {
+          switch (element["subscribed"]) {
+            case true:
+              otherFavouritePlaylist
+                  .add((name: element["name"], id: element["id"]));
+              break;
+            case false:
+              otherCreatePlaylist
+                  .add((name: element["name"], id: element["id"]));
+              break;
+            default:
+              otherUnknowPlaylist
+                  .add((name: element["name"], id: element["id"]));
+          }
+        }
+
+        print("此账户创建的歌单");
+        int i = 0;
+        for (({int id, String name}) element in otherCreatePlaylist) {
+          i++;
+          print("$i: ${element.name}");
+        }
+        print("");
+
+        print("此账户收藏的歌单");
+        i = 0;
+        for (({int id, String name}) element in otherFavouritePlaylist) {
+          i++;
+          print("$i: ${element.name}");
+        }
+        print("");
+
+        bool isFinish = false;
+        while (!isFinish) {
+          switch (input("你希望获取哪里的歌单?\n"
+                  "输入 c 为此账户创建的歌单, F 为此账户收藏的歌单\n"
+                  "不区分大小写(c/F)")!
+              .toUpperCase()) {
+            case "C":
+              String? inputStr = input("请输入歌单对应的编号:");
+              int inputInt = (int.tryParse(inputStr ?? "1") ?? 1) - 1;
+              neteaseIndex(
+                  otherCreatePlaylist[inputInt].id.toString(), cookieString);
+              isFinish = true;
+              break;
+            case "F":
+              String? inputStr = input("请输入歌单对应的编号:");
+              int inputInt = (int.tryParse(inputStr ?? "1") ?? 1) - 1;
+              neteaseIndex(
+                  otherFavouritePlaylist[inputInt].id.toString(), cookieString);
+              isFinish = true;
+              break;
+            default:
+              print("请提供正确的输入!");
+          }
+        }
+        break;
+      default:
+        print("请提供正确的输入!");
     }
   }
 }
