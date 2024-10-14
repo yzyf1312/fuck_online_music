@@ -39,9 +39,9 @@ void main(List<String> arguments) async {
 
   final String? cookieString = await getCookieFromTXT();
   if (listId == null) {
-    neteaseWithAccount(cookieString ?? "");
+    await neteaseWithAccount(cookieString ?? "");
   } else {
-    neteaseIndex(listId, cookieString);
+    await neteaseIndex(listId, cookieString);
   }
 }
 
@@ -672,7 +672,7 @@ Future<Map<String, dynamic>> getUserPlaylist(
   return convert.jsonDecode(response.body) as Map<String, dynamic>;
 }
 
-void neteaseWithAccount(String cookieString) async {
+Future<void> neteaseWithAccount(String cookieString) async {
   List<({int id, String name})> createPlaylist = [];
   List<({int id, String name})> favouritePlaylist = [];
   List<({int id, String name})> unknowPlaylist = [];
@@ -718,13 +718,15 @@ void neteaseWithAccount(String cookieString) async {
       case "C":
         String? inputStr = input("请输入歌单对应的编号:");
         int inputInt = (int.tryParse(inputStr ?? "1") ?? 1) - 1;
-        neteaseIndex(createPlaylist[inputInt].id.toString(), cookieString);
+        await neteaseIndex(
+            createPlaylist[inputInt].id.toString(), cookieString);
         isFinish = true;
         break;
       case "F":
         String? inputStr = input("请输入歌单对应的编号:");
         int inputInt = (int.tryParse(inputStr ?? "1") ?? 1) - 1;
-        neteaseIndex(favouritePlaylist[inputInt].id.toString(), cookieString);
+        await neteaseIndex(
+            favouritePlaylist[inputInt].id.toString(), cookieString);
         isFinish = true;
         break;
       case "ID":
@@ -782,14 +784,14 @@ void neteaseWithAccount(String cookieString) async {
             case "C":
               String? inputStr = input("请输入歌单对应的编号:");
               int inputInt = (int.tryParse(inputStr ?? "1") ?? 1) - 1;
-              neteaseIndex(
+              await neteaseIndex(
                   otherCreatePlaylist[inputInt].id.toString(), cookieString);
               isFinish = true;
               break;
             case "F":
               String? inputStr = input("请输入歌单对应的编号:");
               int inputInt = (int.tryParse(inputStr ?? "1") ?? 1) - 1;
-              neteaseIndex(
+              await neteaseIndex(
                   otherFavouritePlaylist[inputInt].id.toString(), cookieString);
               isFinish = true;
               break;
